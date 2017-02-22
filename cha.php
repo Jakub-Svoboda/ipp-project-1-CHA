@@ -31,11 +31,11 @@ function checkDuplicates(array $flags, $parameter){		//TODO
 function checkValidArguments(array $argv){
 	$counter =0;
 	foreach($argv as $argument){
-		if($counter == 0){
+		if($counter == 0){									//Condition for the fist argument (name of the script) to be skipped.
 			$counter++;
 			continue;
 		}
-		if ((strpos($argument, 'help') === false) 	&& 
+		if ((strpos($argument, 'help') === false) 	&& 		//Seach each argument for substring of valid arguments
 			(strpos($argument, 'input') === false) 	&& 
 			(strpos($argument, 'output') === false) && 
 			(strpos($argument, 'pretty-xml') === false) && 
@@ -44,7 +44,7 @@ function checkValidArguments(array $argv){
 			(strpos($argument, 'no-duplicate') === false) &&
 			(strpos($argument, 'remove-whitespace') === false))	
 		{		
-			fwrite(STDERR,"Unknown parameter: ");
+			fwrite(STDERR,"Unknown parameter: ");			//Not a valid argument, die.
 			fwrite(STDERR, $argument);
 			fwrite(STDERR, "\n");	
 			exit(ERROR_PARAMETERS);
@@ -52,6 +52,66 @@ function checkValidArguments(array $argv){
 		$counter++;
 	}
 	
+}
+
+function getFiles($input){
+	$fileArray = [];											//initialize empty array for file names with .h ending
+	if($input === false){										//opening all .h files in directory and subdirectories	
+		$dirIterator = new RecursiveDirectoryIterator(__DIR__,RecursiveDirectoryIterator::SKIP_DOTS);		//based on http://stackoverflow.com/questions/15054997/find-all-php-files-in-folder-recursively
+		$iterIter= new RecursiveIteratorIterator($dirIterator);
+		foreach($iterIter as $file) {
+			if (pathinfo($file, PATHINFO_EXTENSION) == "h") {
+				array_push($fileArray, $file);						//append to file array
+			}
+		}
+	}else{														//opening single file or dir (--input has been specified)
+		if(file_exists($input)){									//if file or dir exists
+			if(is_dir($input)){											//input is a subdirectory
+				$dirIterator = new RecursiveDirectoryIterator($input,RecursiveDirectoryIterator::SKIP_DOTS);		//based on http://stackoverflow.com/questions/15054997/find-all-php-files-in-folder-recursively
+				$iterIter= new RecursiveIteratorIterator($dirIterator);
+				foreach($iterIter as $file) {
+					if (pathinfo($file, PATHINFO_EXTENSION) == "h") {
+						array_push($fileArray, $file);						//append to file array
+					}
+				}
+			}else{														//input is a single file
+				array_push($fileArray, $input);						//append to file array
+			}	
+		}else{
+			fwrite(STDERR,"Nonexistant input file or folder.\n");			
+			exit(ERROR_INPUT);
+		}
+	}
+	return $fileArray;
+}
+
+function getDir($input){
+	if($input === false){		//no --input, dir should be ./
+		return "./";
+	}else{
+		if(is_dir($input)){
+			$dir=$input;		//dir is route to subfolder
+		}else{					//its a file, dir should be empty
+			$dir = "";
+		}
+	}
+	return $dir;
+}
+
+function format($str, $prettyXml){ //TODO there is no \n on the end of the output file, maybe its a problem? TODO pretty-xml without number
+	if ($prettyXml === false){
+		$str = str_replace("\n", '', $str);						//delete new lines
+	}else{
+		$str = str_replace("\n", '', $str);					
+		$str = str_replace(">", ">\n", $str);					//add correct new lines
+		for ($i = 0; $i < $prettyXml; $i++) {
+			$str = str_replace("<function", " <function", $str);
+			$str = str_replace("</function", " </function", $str);	
+			$str = str_replace(" <functions", "<functions", $str);
+			$str = str_replace(" </functions", "</functions", $str);			
+		}	
+	}	
+	return $str;
 }
 
 $longops=array(
@@ -62,8 +122,7 @@ $longops=array(
 	"no-inline::",
 	"max-par:",
 	"no-duplicates::",
-	"remove-whitespace::"
-	
+	"remove-whitespace::"	
 );
 
 define("ERROR_PARAMETERS",1);
@@ -77,12 +136,11 @@ checkValidArguments($argv);								//Makes sure that a nondefined parameter cann
 //parameters default values:
 $input = false;
 $output = false;
-$prettyXml=4;			//default value
+$prettyXml=false;			
 $noInline = false;
 $maxPar=false;
 $noDuplicates=false;
 $removeWhitespace=false;
-
 
 foreach(array_keys($flags) as $parameter){	
 	checkDuplicates($flags, $parameter);					//Duplicit argument control, aka --input --input		//TODO
@@ -102,8 +160,12 @@ foreach(array_keys($flags) as $parameter){
 		case "output":										//output parameter recognized
 			$output=$flags[$parameter];
 			break;
-		case "pretty-xml":									//pretty-xml parameter recognized
-			$prettyXml=$flags[$parameter];
+		case "pretty-xml":									//pretty-xml parameter recognized							
+			if( in_array("--pretty-xml", $argv)){			
+				$prettyXml=4;;
+			}else{
+				$prettyXml=$flags[$parameter];
+			}
 			break;
 		case "no-inline":									//no-inline parameter recognized
 			$noInline=true;
@@ -119,9 +181,67 @@ foreach(array_keys($flags) as $parameter){
 			break;		
 		default:
 			fwrite(STDERR,"Unknown parameter. \n");			//obsolete
-			exit(ERROR_PARAMETERS);
-			
+			exit(ERROR_PARAMETERS);		
 	}		
 }
+
+$targetfile;
+$fileArray = getFiles($input);								//get all .h files to a single array
+//TODO READ AND WRITE PERMISSIONs
+if($output === false){										//output to stdout
+	$targetFile=STDOUT;
+}else{														//output to a file
+	$targetFile=fopen($output,'w');
+}
+
+$xml = new DOMDocument('1.0', 'utf-8');						//create the XML document
+$xmlFunctions = $xml->createElement( "functions" );			//create functions element (root)
+
+$dir=getDir($input);										
+$xmlFunctions->setAttribute("dir",$dir);					
+$xmlFunctions= $xml->appendChild($xmlFunctions);			//appen root to xml
+$text="";
+
+foreach($fileArray as $currentFile){
+	$file=fopen($currentFile,'r');
+	if(!($file)){											//open file failsafe
+		fwrite(STDERR,"Cannot open file. \n");			
+		exit(ERROR_INPUT);	
+	}
+	while (($line = fgets($file)) !== false) {
+		if(($line[0] == '/') &&($line[1] == '/')){			//remove single line comments
+			
+		}else{
+			$text.=$line;
+		}
+	}
+	$text=str_replace("\n",'',$text);
+	
+	fwrite(STDERR,preg_replace("(\/\*([^*]|[\r\n]|(\*+([^*\/]|[\r\n])))*\*+\/)","",$text));
+	
+	
+	
+	
+	
+	
+	
+	
+
+	$text="";												//reset the variable
+}
+
+
+
+
+
+
+
+$xmlFunctions->appendChild($xml->createTextNode(''));		//create new node for the functions element to be properly closed
+
+$str=$xml->saveXML();
+$str=format($str,$prettyXml);								//pretty-xml formating
+
+//fwrite($targetFile,$str);
+
 
 ?>
