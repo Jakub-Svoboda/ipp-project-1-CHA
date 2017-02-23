@@ -209,15 +209,13 @@ foreach($fileArray as $currentFile){
 		exit(ERROR_INPUT);	
 	}
 	while (($line = fgets($file)) !== false) {
-		if(($line[0] == '/') &&($line[1] == '/')){			//remove single line comments
-			
-		}else{
+		if((($line[0] != '/') || ($line[1] != '/')) && ($line[0] != '#')){			//remove single line comments and macros
 			$text.=$line;
 		}
 	}
-	$text=str_replace("\n",'',$text);
+	//$text=str_replace("\n",'',$text);						//remove newlines
 	
-	fwrite(STDERR,preg_replace("(\/\*([^*]|[\r\n]|(\*+([^*\/]|[\r\n])))*\*+\/)","",$text));
+	fwrite(STDERR,preg_replace("(\/\*([^*]|[\r\n]|(\*+([^*\/]|[\r\n])))*\*+\/)","",$text));		//remove block comments
 	
 	
 	
@@ -229,10 +227,6 @@ foreach($fileArray as $currentFile){
 
 	$text="";												//reset the variable
 }
-
-
-
-
 
 
 
