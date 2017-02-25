@@ -104,6 +104,7 @@ function getDir($input){
 function format($str, $prettyXml){ //TODO there is no \n on the end of the output file, maybe its a problem? TODO pretty-xml without number
 	if ($prettyXml === false){
 		$str = str_replace("\n", '', $str);						//delete new lines
+		$str.="\n";
 	}else{
 		$str = str_replace("\n", '', $str);					
 		$str = str_replace(">", ">\n", $str);					//add correct new lines
@@ -115,7 +116,9 @@ function format($str, $prettyXml){ //TODO there is no \n on the end of the outpu
 			$str = str_replace("<param", "  <param", $str);			
 		}	
 	}	
-	$str=preg_replace("#\"\/\>#","\" />",$str);
+	$str=preg_replace("#\"\/\>#","\" />",$str);					//the empty <function> tags should have a space before closing aka: <function bla="bla" />
+	
+	
 	return $str;
 }
 
