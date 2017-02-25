@@ -91,6 +91,9 @@ function getDir($input){
 	}else{
 		if(is_dir($input)){
 			$dir=$input;		//dir is route to subfolder
+			if(!preg_match("#\/$#",$dir)){		//dir not ending with / , has to be appended
+				$dir.="/";
+			}
 		}else{					//its a file, dir should be empty
 			$dir = "";
 		}
@@ -108,9 +111,11 @@ function format($str, $prettyXml){ //TODO there is no \n on the end of the outpu
 			$str = str_replace("<function", " <function", $str);
 			$str = str_replace("</function", " </function", $str);	
 			$str = str_replace(" <functions", "<functions", $str);
-			$str = str_replace(" </functions", "</functions", $str);			
+			$str = str_replace(" </functions", "</functions", $str);	
+			$str = str_replace("<param", "  <param", $str);			
 		}	
 	}	
+	$str=preg_replace("#\"\/\>#","\" />",$str);
 	return $str;
 }
 
@@ -130,6 +135,72 @@ function removeUnnecessary($text){
 function removeWhitespace($text){
 	$text=preg_replace('/\s+/',' ',$text);										//replaces double spaves with single one
 	return $text;
+}
+
+function workWithFunctions(array $funcArray,$xml,$functionNamePattern,$xmlFunctions,$currentFile,$noInline,$maxPar){
+	/*--Working with individual FUNCTIONS one by one*/	
+	foreach($funcArray as $function){
+		if($noInline && preg_match("#inline(\*|\s)#",$function)){		//skip function if --no-inline
+			continue;
+		}
+		preg_match("#((extern|inline|static|unsigned|int|void|double|const|float|signed|short|long|\*)\s|\*)+#",$function, $rettype);		//get the return type
+		$function=preg_replace("#((extern|inline|static|unsigned|int|void|double|const|float|signed|short|long|\*)\s|\*)+#","",$function,1);
+		$rettype[0]=trim($rettype[0]);						//remove spaces in front and behind the rettype
+		$function=trim($function);							//remove spaces in front and behind the function		
+		preg_match($functionNamePattern,$function, $name);	//get the name
+		$function=preg_replace($functionNamePattern,"",$function,1);	//and delete the name
+		$name[0]=trim($name[0]);					 		//remove spaces in front and behind the name
+		$function=trim($function);							//remove spaces in front and behind the function
+		$function=substr($function,1,-1);					//remove argument parentheses
+		$args=preg_split('#,#',$function);					//split the arguments by comma,creates an array !!with potentialy empty arguments and void
+		if(preg_grep("#\.\.\.#",$args)){					//search for ..., if found, varags is true
+			$varargs="yes";
+		}else{
+			$varargs="no";
+		}
+		
+		$functionElement=$xml->createElement( "function" );	//create function element 
+		$functionElement=$xmlFunctions->appendChild($functionElement);	//append the function to the Functions element
+		$functionElement->setAttribute("file",$currentFile);			//set currentfile
+		$functionElement->setAttribute("name",$name[0]);				//set name
+		$functionElement->setAttribute("varargs",$varargs);				//set varargs
+		$functionElement->setAttribute("rettype",$rettype[0]);			//set varargs
+		
+		$xml=workWithArguments($args,$xml,$functionElement,$maxPar,$name);	/*Working with individual ARGUMENTS one by one*/
+	}
+	return $xml;
+}
+
+function workWithArguments(array $args,$xml,$functionElement,$maxPar,array $name){
+	$number=1;
+	$numOfArgs=0;
+	foreach($args as $arg){
+		$arg=trim($arg);
+		if(preg_match("#\.\.\.#",$arg) || !preg_match("#[_a-zA-Z][0-9_a-zA-Z]*#",$arg)){		// ... as argument or no word in there
+			continue;
+		}else{
+			if(preg_match("#^\s*void\s*$#",$arg)){									//remove (void) arguments
+				continue;
+			}else{		
+				$numOfArgs++;
+				$arg=preg_replace("#[_a-zA-Z][0-9_a-zA-Z]*$#","",$arg,1);			//remove argument name
+				$arg=trim($arg);		
+				$argumentElement=$xml->createElement( "param" );
+				$argumentElement=$functionElement->appendChild($argumentElement);	//append the argument to its function
+				$argumentElement->setAttribute("number",$number);		//set number
+				$argumentElement->setAttribute("type",$arg);			//set argument type
+				$number++;
+			}	
+		}		
+	}	
+	if($maxPar){	//--max-par is checked, if the # of arguments is greater, the functionElement tells its parent to delete itself
+		if($maxPar<$numOfArgs){
+			$functionElement->parentNode->removeChild($functionElement);
+			
+		}
+	}
+	$functionElement->appendChild($xml->createTextNode(''));		//create new node for the function element to be properly closed
+	return $xml;
 }
 
 $longops=array(
@@ -210,9 +281,13 @@ if($output === false){										//output to stdout
 	$targetFile=STDOUT;
 }else{														//output to a file
 	$targetFile=fopen($output,'w');
+	if(!$targetFile){
+		fwrite(STDERR,"Cannot open file. \n");			
+		exit(ERROR_OUTPUT);	
+	}
 }
 
-$xml = new DOMDocument('1.0', 'utf-8');						//create the XML document
+$xml = new DOMDocument('1.0', 'UTF-8');						//create the XML document
 $xmlFunctions = $xml->createElement( "functions" );			//create functions element (root)
 
 $dir=getDir($input);										
@@ -222,6 +297,7 @@ $text="";
 $varargs="no";
 $functionNamePattern = "#[_a-zA-Z][0-9_a-zA-Z]*#";			//first char cannot be numerical
 
+/*Working with individual FILES one by one--------------------------------------------------*/
 foreach($fileArray as $currentFile){						//for each file with .h extension
 	$file=fopen($currentFile,'r');
 	if(!($file)){											//open file failsafe
@@ -242,47 +318,8 @@ foreach($fileArray as $currentFile){						//for each file with .h extension
 	array_pop($funcArray);									//remove string after the last ;
 	foreach(array_keys($funcArray) as $func){
 		$funcArray[$func]=trim($funcArray[$func]);			//remove spaces in front and behind the prototype
-	}	
-	foreach($funcArray as $function){
-		preg_match("#((extern|inline|static|unsigned|int|void|double|const|float|signed|short|long|\*)\s|\*)+#",$function, $rettype);		//get the return type
-		$function=preg_replace("#((extern|inline|static|unsigned|int|void|double|const|float|signed|short|long|\*)\s|\*)+#","",$function);
-		$rettype[0]=trim($rettype[0]);						//remove spaces in front and behind the rettype
-		$function=trim($function);							//remove spaces in front and behind the function		
-		preg_match($functionNamePattern,$function, $name);	//get the name
-
-		$function=preg_replace($functionNamePattern,"",$function,1);
-		$name[0]=trim($name[0]);					 		//remove spaces in front and behind the name
-		$function=trim($function);							//remove spaces in front and behind the function
-		$function=substr($function,1,-1);					//remove argument parentheses
-		$args=preg_split('#,#',$function);					//split the arguments by comma,creates an array !!with potentialy empty arguments and void
-		if(preg_grep("#\.\.\.#",$args)){					//search for ..., if found, varags is true
-			$varargs="yes";
-		}else{
-			$varargs="no";
-		}
-		
-		$functionElement=$xml->createElement( "function" );	//create function element 
-		$functionElement=$xmlFunctions->appendChild($functionElement);	//append the function to the Functions element
-		$functionElement->setAttribute("file",$currentFile);			//set currentfile
-		$functionElement->setAttribute("name",$name[0]);				//set name
-		$functionElement->setAttribute("varargs",$varargs);				//set varargs
-		$functionElement->setAttribute("rettype",$rettype[0]);				//set varargs
-		
-		foreach($args as $arg){
-			if(preg_match("#\.\.\.#",$arg) || !preg_match("#[_a-zA-Z][0-9_a-zA-Z]*#",$arg)){		// ... as argument or no word in there
-				continue;
-			}else{
-				
-			}
-			
-		}
-		
 	}
-	
-	
-	
-	
-	
+	$xml=workWithFunctions($funcArray,$xml,$functionNamePattern, $xmlFunctions,$currentFile,$noInline,$maxPar);
 	$text="";												//reset the variable
 }
 
@@ -298,6 +335,7 @@ $xmlFunctions->appendChild($xml->createTextNode(''));		//create new node for the
 
 $str=$xml->saveXML();
 $str=format($str,$prettyXml);								//pretty-xml formating
+
 
 fwrite($targetFile,$str);
 
