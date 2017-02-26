@@ -101,7 +101,7 @@ function getDir($input){
 	return $dir;
 }
 
-function format($str, $prettyXml){ //TODO there is no \n on the end of the output file, maybe its a problem? TODO pretty-xml without number
+function format($str, $prettyXml){ //TODO pretty-xml without number
 	if ($prettyXml === false){
 		$str = str_replace("\n", '', $str);						//delete new lines
 		$str.="\n";
@@ -136,11 +136,13 @@ function removeUnnecessary($text){
 }
 
 function removeWhitespace($text){
-	$text=preg_replace('/\s+/',' ',$text);										//replaces double spaves with single one
+	$text=preg_replace('/\s+/',' ',$text);			//replaces double spaces with single one
+	$text=preg_replace('#\s\*#', '*',$text);		//removes spaces in front and after star (pointer), beacause these should be removed for whatever reason
+	$text=preg_replace('#\*\s#', '*',$text);
 	return $text;
 }
 
-function workWithFunctions(array $funcArray,$xml,$functionNamePattern,$xmlFunctions,$currentFile,$noInline,$maxPar){
+function workWithFunctions(array $funcArray,$xml,$functionNamePattern,$xmlFunctions,$currentFile,$noInline,$maxPar,$dir,$noDuplicates){
 	/*--Working with individual FUNCTIONS one by one*/	
 	foreach($funcArray as $function){
 		if($noInline && preg_match("#inline(\*|\s)#",$function)){		//skip function if --no-inline
@@ -151,6 +153,15 @@ function workWithFunctions(array $funcArray,$xml,$functionNamePattern,$xmlFuncti
 		$rettype[0]=trim($rettype[0]);						//remove spaces in front and behind the rettype
 		$function=trim($function);							//remove spaces in front and behind the function		
 		preg_match($functionNamePattern,$function, $name);	//get the name
+		if($noDuplicates){	//--no-duplicates is checked, if the function is duplicite, it is removed
+			$temp=$xml->saveXML();
+			$tempName = '#name="';
+			$tempName.=$name[0];
+			$tempName.='"#';
+			if(preg_match($tempName  , $temp)){
+				continue;	
+			}
+		}
 		$function=preg_replace($functionNamePattern,"",$function,1);	//and delete the name
 		$name[0]=trim($name[0]);					 		//remove spaces in front and behind the name
 		$function=trim($function);							//remove spaces in front and behind the function
@@ -161,14 +172,14 @@ function workWithFunctions(array $funcArray,$xml,$functionNamePattern,$xmlFuncti
 		}else{
 			$varargs="no";
 		}
-		
+		$fileStr = str_replace($dir, "", $currentFile);
 		$functionElement=$xml->createElement( "function" );	//create function element 
 		$functionElement=$xmlFunctions->appendChild($functionElement);	//append the function to the Functions element
-		$functionElement->setAttribute("file",$currentFile);			//set currentfile
+		$functionElement->setAttribute("file",$fileStr);			//set currentfile
 		$functionElement->setAttribute("name",$name[0]);				//set name
 		$functionElement->setAttribute("varargs",$varargs);				//set varargs
-		$functionElement->setAttribute("rettype",$rettype[0]);			//set varargs
-		
+		$functionElement->setAttribute("rettype",$rettype[0]);			//set rettype
+				
 		$xml=workWithArguments($args,$xml,$functionElement,$maxPar,$name);	/*Working with individual ARGUMENTS one by one*/
 	}
 	return $xml;
@@ -322,7 +333,7 @@ foreach($fileArray as $currentFile){						//for each file with .h extension
 	foreach(array_keys($funcArray) as $func){
 		$funcArray[$func]=trim($funcArray[$func]);			//remove spaces in front and behind the prototype
 	}
-	$xml=workWithFunctions($funcArray,$xml,$functionNamePattern, $xmlFunctions,$currentFile,$noInline,$maxPar);
+	$xml=workWithFunctions($funcArray,$xml,$functionNamePattern, $xmlFunctions,$currentFile,$noInline,$maxPar,$dir,$noDuplicates);
 	$text="";												//reset the variable
 }
 
