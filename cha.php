@@ -21,9 +21,10 @@ function printHelp(){
 	echo "\n";
 }
 
-function checkDuplicates(array $flags, $parameter){		//TODO
+function checkDuplicates(array $flags, $parameter){		
 	if (is_array($flags[$parameter])) {
-			fwrite(STDERR,"Duplicite parameter. \n"  );
+			fwrite(STDERR,"Duplicite parameter."  );
+			fwrite(STDERR,"\n");
 			die(ERROR_PARAMETERS);
 		}
 }
@@ -101,7 +102,7 @@ function getDir($input){
 	return $dir;
 }
 
-function format($str, $prettyXml){ //TODO pretty-xml without number
+function format($str, $prettyXml){ 
 	if ($prettyXml === false){
 		$str = str_replace("\n", '', $str);						//delete new lines
 		$str.="\n";
@@ -207,7 +208,7 @@ function workWithArguments(array $args,$xml,$functionElement,$maxPar,array $name
 			}	
 		}		
 	}	
-	if($maxPar){	//--max-par is checked, if the # of arguments is greater, the functionElement tells its parent to delete itself
+	if($maxPar !== false){	//--max-par is checked, if the # of arguments is greater, the functionElement tells its parent to delete itself
 		if($maxPar<$numOfArgs){
 			$functionElement->parentNode->removeChild($functionElement);
 			
@@ -246,7 +247,7 @@ $noDuplicates=false;
 $removeWhitespace=false;
 
 foreach(array_keys($flags) as $parameter){	
-	checkDuplicates($flags, $parameter);					//Duplicit argument control, aka --input --input		//TODO
+	checkDuplicates($flags, $parameter);					//Duplicit argument control, aka --input --input		
 	switch ($parameter) {
 		case "help":										//help parameter recognized
 			if($flagCount !== 1){
@@ -290,7 +291,6 @@ foreach(array_keys($flags) as $parameter){
 
 $targetfile;
 $fileArray = getFiles($input);								//get all .h files to a single array
-//TODO READ AND WRITE PERMISSIONs
 if($output === false){										//output to stdout
 	$targetFile=STDOUT;
 }else{														//output to a file
@@ -305,7 +305,7 @@ $xml = new DOMDocument('1.0', 'UTF-8');						//create the XML document
 $xmlFunctions = $xml->createElement( "functions" );			//create functions element (root)
 
 $dir=getDir($input);										
-$xmlFunctions->setAttribute("dir",$dir);					//TODO dir is not correct
+$xmlFunctions->setAttribute("dir",$dir);					
 $xmlFunctions= $xml->appendChild($xmlFunctions);			//appen root to xml
 $text="";
 $varargs="no";
