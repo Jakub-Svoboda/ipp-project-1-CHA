@@ -7,8 +7,8 @@
 
 function printHelp(){
 	echo "\n";
-	echo "C header analysis\n";
-	echo "Usage: \nphp5.6 [--help] [--input=fileordir] [--output=filename] [pretty-xml[=k]] [--no-inline] [--max-par=n] [--remove-whitespace]\n";
+	echo "CHA: C header analysis\n";
+	echo "Use: \nphp5.6 [--help] [--input=fileordir] [--output=filename] [pretty-xml[=k]] [--no-inline] [--max-par=n] [--remove-whitespace]\n";
 	echo "\n";
 	echo "--help: Prints out the instructions.\n";
 	echo "--input=fileordir: The file or the directory for the analysis. In case of a folder, all the files and subfolders are analysed.\n";
@@ -295,6 +295,14 @@ $fileArray = getFiles($input);								//get all .h files to a single array
 if($output === false){										//output to stdout
 	$targetFile=STDOUT;
 }else{														//output to a file
+	if(!is_writable($output)){
+		fwrite(STDERR,"Cannot open file. \n");	
+		exit(ERROR_OUTPUT);
+	}
+	if(is_dir($output)){
+		fwrite(STDERR,"Output is a directory. \n");	
+		exit(ERROR_OUTPUT);
+	}
 	$targetFile=fopen($output,'w');
 	if(!$targetFile){
 		fwrite(STDERR,"Cannot open file. \n");			
