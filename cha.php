@@ -129,6 +129,7 @@ function removeUnnecessary($text){
 	$text=str_replace("\t",' ',$text);													//remove tabs	
 	$text=preg_replace("(\/\*([^*]|[\r\n]|(\*+([^*\/]|[\r\n])))*\*+\/)","",$text);		//remove block comments
 	$text=preg_replace('/"([^"]+)"/',"",$text);			//remove strings and replace with "" This is done for sneaky function-like strings.
+	$text=preg_replace("#\'[^\'\"]*\'(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)#",  "",$text); //remove strings and replace with "" This is done for sneaky function-like strings.
 	$text=preg_replace('/{(?:[^{}]+|(?R))*}/',"@",$text);		//remove all {} recursively, replace with @
 	$text=preg_replace("/(typedef.*?;)/","",$text);				//remove typedefs
 	$text=preg_replace("/(struct.*?;)/","",$text);				//remove structs
@@ -149,8 +150,8 @@ function workWithFunctions(array $funcArray,$xml,$functionNamePattern,$xmlFuncti
 		if($noInline && preg_match("#inline(\*|\s)#",$function)){		//skip function if --no-inline
 			continue;
 		}
-		preg_match("#((extern|inline|static|unsigned|int|void|double|const|float|signed|short|long|\*)\s|\*)+#",$function, $rettype);		//get the return type
-		$function=preg_replace("#((extern|inline|static|unsigned|int|void|double|const|float|signed|short|long|\*)\s|\*)+#","",$function,1);
+		preg_match("#((string|extern|inline|bool|static|unsigned|int|void|double|const|float|signed|short|long|\*)\s+|\*)+#",$function, $rettype);		//get the return type
+		$function=preg_replace("#((string|extern|inline|bool|static|unsigned|int|void|double|const|float|signed|short|long|\*)\s+|\*)+#","",$function,1);
 		$rettype[0]=trim($rettype[0]);						//remove spaces in front and behind the rettype
 		$function=trim($function);							//remove spaces in front and behind the function		
 		preg_match($functionNamePattern,$function, $name);	//get the name
